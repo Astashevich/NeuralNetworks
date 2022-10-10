@@ -1,10 +1,14 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Reflection;
 
 namespace NeuralNetworks.Tests
 {
     [TestClass()]
     public class NeuralNetworkTests
     {
+
+        private const string TestFilesDirectoryName = "Images";
+
         [TestMethod()]
         public void FeedForwardTest()
         {
@@ -46,7 +50,7 @@ namespace NeuralNetworks.Tests
             for (int i = 0; i < outputs.Length; i++)
             {
                 var row = NeuralNetwork.GetRow(inputs, i);
-                var res = neuralNetwork.FeedForward(row).Output;
+                var res = neuralNetwork.Predict(row).Output;
                 results.Add(res);
             }
 
@@ -56,6 +60,49 @@ namespace NeuralNetworks.Tests
                 var actual = Math.Round(results[i], 3);
                 Assert.AreEqual(expected, actual);
             }
+        }
+
+        [TestMethod()]
+        public void RecognizeImages()
+        {
+            var size = 1000;
+            var parasitizedPath = @"D:\Хлам\cell_images\Parasitized\";
+            var unparasitizedPath = @"D:\Хлам\cell_images\Uninfected\";
+
+            var converter = new PictureConverter();
+            var testParasitizedImageInput = converter.Convert(Path.Combine(GetTestFilesPath(), "Parasitized.png"));
+            var testUnparasitizedImageInput = converter.Convert(Path.Combine(GetTestFilesPath(), "Unparasitized.png"));
+
+            var topology = new Topology(testParasitizedImageInput.Count, 1, 0.1, testParasitizedImageInput.Count / 2);
+            var neuralNetwork = new NeuralNetwork(topology);
+
+            double[,] parasitizedInputs = GetData(parasitizedPath, converter, testParasitizedImageInput, size);
+            neuralNetwork.Learn(new double[] { 1 }, parasitizedInputs, 1);
+
+            double[,] unparasitizedInputs = GetData(unparasitizedPath, converter, testParasitizedImageInput, size);
+            neuralNetwork.Learn(new double[] { 0 }, unparasitizedInputs, 1);
+
+            var par = neuralNetwork.Predict(testParasitizedImageInput.Select(t => (double)t).ToArray());
+            var unpar = neuralNetwork.Predict(testUnparasitizedImageInput.Select(t => (double)t).ToArray());
+
+            Assert.AreEqual(1, Math.Round(par.Output, 2));
+            Assert.AreEqual(0, Math.Round(unpar.Output, 2));
+        }
+
+        private static double[,] GetData(string parasitizedPath, PictureConverter converter, List<int> testImageInput, int size)
+        {
+            var images = Directory.GetFiles(parasitizedPath);
+            var result = new double[size, testImageInput.Count];
+            for (int i = 0; i < size; i++)
+            {
+                var image = converter.Convert(images[i]);
+                for (int j = 0; j < image.Count; j++)
+                {
+                    result[i, j] = image[j];
+                }
+            }
+
+            return result;
         }
 
         /*[TestMethod()]
@@ -107,5 +154,22 @@ namespace NeuralNetworks.Tests
                 Assert.AreEqual(expected, actual);
             }
         }*/
+
+        private string GetBaseSolutionFolderPath()
+        {
+            var directory = new DirectoryInfo(
+                Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty);
+            while (directory != null && !directory.GetDirectories(TestFilesDirectoryName).Any())
+            {
+                directory = directory.Parent;
+            }
+
+            return directory.FullName;
+        }
+
+        private string GetTestFilesPath()
+        {
+            return Path.Combine(GetBaseSolutionFolderPath(), TestFilesDirectoryName);
+        }
     }
 }
